@@ -130,6 +130,16 @@ input.grow { flex: 1 1 160px; }
 .party .card { background: var(--surface); border: 3px solid var(--sun); border-radius: 28px; padding: 28px 24px; text-align: center; max-width: 360px; display: flex; flex-direction: column; gap: 10px; align-items: center; animation: pop .5s cubic-bezier(.3,1.6,.6,1); }
 .party .big { font-size: 64px; line-height: 1; }
 .party h2 { font-family: var(--display); font-weight: 800; font-size: 28px; margin: 0; text-wrap: balance; }
+.prize { position: fixed; inset: 0; z-index: 12; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px 16px; text-align: center; overflow: hidden; }
+.prize .gift { font-size: clamp(90px, 28vw, 150px); line-height: 1; animation: wiggle 1.4s ease-in-out infinite; }
+.prize h2 { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 8vw, 46px); line-height: 1.1; margin: 0; max-width: 16ch; text-wrap: balance; }
+.prize .pct { font-family: var(--display); font-weight: 800; font-size: 22px; color: var(--berry); }
+.prize p { font-size: 20px; font-weight: 700; margin: 0; max-width: 26ch; color: var(--muted); }
+.prize .btn { font-size: 20px; padding: 14px 32px; border-radius: 16px; position: relative; z-index: 1; }
+.prize .bit { position: absolute; top: -40px; font-size: 26px; animation: fall linear infinite; pointer-events: none; }
+.goal { font-family: var(--body); font-weight: 700; font-size: 13px; letter-spacing: 0; }
+@keyframes wiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-8deg) scale(1.05); } 75% { transform: rotate(8deg) scale(1.05); } }
+@keyframes fall { to { transform: translateY(110vh) rotate(360deg); } }
 .fly { position: fixed; pointer-events: none; font-size: 26px; z-index: 11; animation: fly .9s ease-out forwards; }
 @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes fly { to { transform: translate(var(--dx), -120px) scale(1.4); opacity: 0; } }
@@ -147,7 +157,7 @@ input.grow { flex: 1 1 160px; }
   @page { size: A4; margin: 12mm; }
   :root { --ink: #1E2A44; --muted: #5D6B86; --line: #B9CCDD; color-scheme: light; }
   body { background: #fff; }
-  .app, .party, .fly { display: none !important; }
+  .app, .party, .fly, .prize { display: none !important; }
   .sheet { display: block; color: #1E2A44; font-family: var(--body); font-size: 12px; }
   .sheet h1 { font-family: var(--display); font-size: 26px; margin: 0 0 2px; }
   .sheet .sub { color: #5D6B86; margin: 0 0 10px; }
@@ -222,6 +232,7 @@ input.grow { flex: 1 1 160px; }
   const byDay = sec => sec === 'school' ? S.clubs : sec === 'morning' ? S.mdays : null;
   const DAYKIND = { school: 'club', morning: 'mday' };
   S.done = S.done || {};
+  S.prize = S.prize || {};
   // объединить «Почистить зубы» и «Умыться» в уже сохранённом списке
   (function mergeMorning() {
     const m = S.sections.morning;
@@ -342,7 +353,8 @@ input.grow { flex: 1 1 160px; }
     if (ui.mode === 'edit') h += editPanel(sec, now);
     else h += kidPanel(sec, now);
 
-    h += '<section class="week"><h3>Моя неделя</h3><div class="days">' + weekDates(now).map(d => {
+    const ws = weekStats(now), wp = ws.total ? Math.round(ws.done / ws.total * 100) : 0;
+    h += '<section class="week"><h3>Моя неделя <span class="goal">· ' + wp + '% сделано, для приза нужно 90%</span></h3><div class="days">' + weekDates(now).map(d => {
       const c = countFor(d);
       const isToday = keyOf(d) === keyOf(now);
       const future = d > now && !isToday;
@@ -367,7 +379,16 @@ input.grow { flex: 1 1 160px; }
       }
     }
 
-    if (ui.party) {
+    if (ui.prize) {
+      const bits = ['⭐', '🎉', '✨', '🎈', '🌟', '🎊'];
+      h += '<div class="prize" role="dialog" aria-label="Приз за неделю">' +
+        Array.from({ length: 18 }, (_, i) => '<span class="bit" style="left:' + ((i * 37) % 100) + '%;animation-duration:' + (3 + (i % 5) * 0.7) + 's;animation-delay:' + ((i % 6) * 0.5) + 's">' + bits[i % bits.length] + '</span>').join('') +
+        '<div class="gift">🎁</div><div class="pct">Неделя выполнена на ' + ui.prize + '%!</div>' +
+        '<h2>А теперь можешь попросить приз у родителей!</h2>' +
+        '<p>Ты молодец, ' + esc(S.name || 'Котёнок') + '! Покажи этот экран маме или папе.</p>' +
+        '<button class="btn" data-act="prize-close">Ура!</button></div>';
+    }
+    if (ui.party && !ui.prize) {
       h += '<div class="party" data-act="party-close"><div class="card"><div class="big">🏆</div><h2>Все дела на сегодня сделаны!</h2>' +
         '<p>Ты заработала ' + today.done + ' ' + plural(today.done, 'звезду', 'звезды', 'звёзд') + '. Можно отдыхать!</p>' +
         '<button class="btn" data-act="party-close">Ура!</button></div></div>';
@@ -443,6 +464,18 @@ input.grow { flex: 1 1 160px; }
     return Array.from({ length: 7 }, (_, i) => { const x = new Date(d); x.setDate(d.getDate() + i); return x; });
   }
 
+  function weekStats(date) {
+    return weekDates(date).reduce((a, d) => { const c = countFor(d); return { done: a.done + c.done, total: a.total + c.total }; }, { done: 0, total: 0 });
+  }
+  // приз: за неделю сделано 90% дел — один раз на неделю; проверяем текущую и прошлую неделю
+  function checkPrize() {
+    const now = new Date(), prev = new Date(now); prev.setDate(now.getDate() - 7);
+    [prev, now].forEach(d => {
+      const wk = keyOf(weekDates(d)[0]), st = weekStats(d);
+      if (!S.prize[wk] && st.total && st.done / st.total >= 0.9) { S.prize[wk] = true; ui.prize = Math.round(st.done / st.total * 100); save(); }
+    });
+  }
+
   function star(size) {
     return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" aria-hidden="true"><path fill="var(--sun)" d="M12 2.5l2.9 6 6.6.8-4.9 4.5 1.3 6.5L12 17l-5.9 3.3 1.3-6.5L2.5 9.3l6.6-.8z"/></svg>';
   }
@@ -499,6 +532,7 @@ input.grow { flex: 1 1 160px; }
       save();
       const c = countFor(now);
       if (!wasAll && c.total && c.done === c.total) ui.party = true;
+      checkPrize();
       render();
       return;
     }
@@ -506,6 +540,7 @@ input.grow { flex: 1 1 160px; }
     const a = e.target.closest('[data-act]');
     if (!a) return;
     const act = a.dataset.act;
+    if (act === 'prize-close') { ui.prize = 0; ui.party = false; render(); return; }
     if (act === 'party-close') { if (e.target === a || a.tagName === 'BUTTON') { ui.party = false; render(); } return; }
     if (act === 'gate') { ui.gate = true; ui.gateErr = ''; render(); }
     if (act === 'gate-cancel') { ui.gate = null; render(); }
@@ -553,6 +588,7 @@ input.grow { flex: 1 1 160px; }
   });
 
   // новый день — перерисовать в полночь, если страница открыта
+  checkPrize();
   let lastDay = keyOf(new Date());
   setInterval(() => { const k = keyOf(new Date()); if (k !== lastDay) { lastDay = k; render(); } }, 60000);
 
