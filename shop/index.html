@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Осенний шопинг-лист</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  /* Layout: one reading column; summary + presets on top, categories as lists, sticky total bar at bottom */
+  :root {
+    --bg: #F5F2EC; --card: #FBF9F5; --ink: #2A1F17; --muted: #7d6e62; --line: #E3DBCF;
+    --olive: #5E7052; --olive-ink: #ffffff; --clay: #B9805F; --soft: #EBE2D6;
+    --f-display: 'Unbounded', 'Arial Black', sans-serif;
+    --f-body: 'Onest', -apple-system, 'Segoe UI', sans-serif;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #1c1712; --card: #251f19; --ink: #f1e9df; --muted: #a8998b; --line: #3a3128;
+    --olive: #8fa57f; --olive-ink: #141a10; --clay: #d9a383; --soft: #2f2720; color-scheme: dark } }
+  :root[data-theme="dark"] {
+    --bg: #1c1712; --card: #251f19; --ink: #f1e9df; --muted: #a8998b; --line: #3a3128;
+    --olive: #8fa57f; --olive-ink: #141a10; --clay: #d9a383; --soft: #2f2720; color-scheme: dark }
+
+  body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--f-body); }
+  .wrap { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 120px; display: grid; gap: 28px; }
+  header { display: grid; gap: 6px; }
+  .eyebrow { font: 500 11px var(--f-display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  h1 { font: 700 clamp(26px, 6vw, 38px)/1.1 var(--f-display); margin: 0; text-wrap: balance; }
+  .lead { color: var(--muted); margin: 0; max-width: 60ch; }
+
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; }
+  .presets button { font: 500 14px var(--f-body); padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); cursor: pointer; display: inline-flex; gap: 8px; align-items: baseline; }
+  .presets button small { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .presets button:hover { border-color: var(--olive); }
+  .presets button:focus-visible, input:focus-visible + .box, a:focus-visible { outline: 2px solid var(--olive); outline-offset: 2px; }
+
+  .summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1px; background: var(--line);
+    border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .summary div { background: var(--card); padding: 10px 12px; display: grid; gap: 2px; }
+  .summary span { font-size: 12px; color: var(--muted); }
+  .summary b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .summary b.zero { color: var(--muted); font-weight: 400; }
+
+  section { display: grid; gap: 8px; }
+  .cat-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  h2 { font: 700 15px var(--f-display); margin: 0; letter-spacing: .02em; }
+  .cat-sum { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; white-space: nowrap; }
+  .cat-sum.on { color: var(--olive); font-weight: 600; }
+  .tip { font-size: 13px; color: var(--muted); margin: 0; }
+
+  ul { list-style: none; margin: 0; padding: 0; display: grid; }
+  li label { display: grid; grid-template-columns: 22px 1fr auto auto; gap: 12px; align-items: center; padding: 9px 4px; cursor: pointer;
+    border-bottom: 1px dashed var(--line); }
+  li:last-child label { border-bottom: 0; }
+  li input { position: absolute; opacity: 0; pointer-events: none; }
+  .box { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--muted); display: grid; place-items: center; }
+  .box::after { content: ''; width: 10px; height: 6px; border: 2px solid var(--olive-ink); border-top: 0; border-right: 0; transform: rotate(-45deg) translate(1px,-1px); opacity: 0; }
+  input:checked + .box { background: var(--olive); border-color: var(--olive); }
+  input:checked + .box::after { opacity: 1; }
+  .info { min-width: 0; display: grid; gap: 1px; }
+  .name { font-weight: 500; }
+  .note { font-size: 13px; color: var(--muted); }
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--soft); color: var(--clay); margin-left: 6px; vertical-align: 1px; }
+  .price { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  .price s { color: var(--muted); font-size: 12px; display: block; }
+  .price.na { color: var(--muted); font-size: 13px; }
+  .go { color: var(--muted); text-decoration: none; font-size: 18px; padding: 2px 4px; }
+  .go:hover { color: var(--olive); }
+  li.checked .name { color: var(--olive); }
+
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--ink); color: var(--bg);
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .bar-in { max-width: 760px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .bar .cnt { font-size: 13px; opacity: .75; }
+  .bar .total { font: 700 22px var(--f-display); font-variant-numeric: tabular-nums; }
+  .bar button { font: 500 13px var(--f-body); background: transparent; color: var(--bg); border: 1px solid currentColor; opacity: .75; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  footer { font-size: 13px; color: var(--muted); }
+
+  @media (max-width: 480px) {
+    li label { grid-template-columns: 22px 1fr auto; }
+    .go { display: none; }
+  }
+</style>
+</head>
+<body style="margin:0">
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Подборка Насти Лепустиной · осень–зима</div>
+    <h1>Осенний шопинг-лист</h1>
+    <p class="lead">Отмечайте вещи, которые берёте, и итог посчитается внизу. Можно начать с готового набора, а потом убрать или добавить отдельные вещи.</p>
+  </header>
+
+  <div class="presets" id="presets"></div>
+  <div class="summary" id="summary"></div>
+  <div id="list" style="display:grid;gap:28px"></div>
+
+  <footer>Цены на 7 октября 2026. Lamoda — по скриншотам избранного, остальное — с сайтов магазинов. Ссылка ↗ ведёт на товар.</footer>
+</div>
+
+<div class="bar">
+  <div class="bar-in">
+    <div><div class="cnt" id="cnt">Ничего не выбрано</div><div class="total" id="total">0 ₽</div></div>
+    <button id="reset" type="button">Снять все галочки</button>
+  </div>
+</div>
+
+<script>
+const L = 'https://www.lamoda.ru/p/';
+const H13 = 'скидка ещё ~13 ч';
+const CATS = [
+  { id: 'leather', title: 'Брюки из кожи', tip: 'Достаточно одних.', items: [
+    { id: 'l1', name: 'Chalaia, зелёные', note: 'с коричневым, бордо, светлым', price: 11625, old: 12500, url: L+'mp002xw17zsz/' },
+    { id: 'l2', name: 'Chalaia, чёрные с текстурой', note: 'для тотал блэка', price: 12800, url: L+'mp002xw182jy/' },
+    { id: 'l3', name: 'Chalaia, бордовые', note: 'цены нет на скриншотах', price: null, url: L+'mp002xw182jt/' },
+    { id: 'l4', name: 'Снежная Королева, натуральная кожа', note: 'скидка, почти как эко', price: 16190, url: 'https://snowqueen.ru/tyumen/product/brjuki-iz-naturalnoj-kozhi-831784003' },
+  ]},
+  { id: 'body', title: 'Кружевные боди', tip: 'Можно взять 1–2.', items: [
+    { id: 'b1', name: 'Calliope, боди-футболка', note: 'самостоятельная вещь', price: 2299, url: L+'mp002xw1oniq/' },
+    { id: 'b2', name: 'Lookonline, деликатное кружево', note: '', price: 2890, url: L+'mp002xw1ofkz/' },
+    { id: 'b3', name: 'The Key, светло-серое', note: 'с коричневым и яркими', price: 4769, old: 5299, url: L+'mp002xw1nsw1/' },
+  ]},
+  { id: 'knit', title: 'Лонгсливы и трикотаж', tip: 'Обычно 3–4 вещи.', items: [
+    { id: 'k1', name: 'SELA, кардиган с контрастной вставкой', note: 'эффект многослойности', price: 3299, url: L+'mp002xw1pdjz/' },
+    { id: 'k2', name: 'TheBase, лонгслив с подплечниками', note: 'полубазовый', price: 3400, url: L+'mp002xw1op9p/' },
+    { id: 'k3', name: 'Selfmade, облегающая футболка', note: 'нижний слой, хороший состав', price: 3990, url: 'https://selfmade.ru/collection/trikotazh-2/product/futbolka-oblegayuschaya-2f4c36' },
+    { id: 'k4', name: 'Lime, «нарядный» кардиган', note: 'с кружевом', price: 3999, url: 'https://limestore.com/ru_ru/product/31652_4676_261-4676_261_201_temno_koricnevyi' },
+    { id: 'k5', name: 'IDOL, лонгслив тенсел + шерсть', note: 'яркий нижний слой, доставка в Тюмень', price: 4990, url: 'https://idol.ru/product/longsliv-iz-tensela-i-shersti-id5401937615-23/' },
+    { id: 'k6', name: 'Selfmade, майка-водолазка', note: 'есть в красном', price: 4990, url: 'https://selfmade.ru/collection/novinki/product/mayka-s-vorotnikom-stoykoy-3' },
+    { id: 'k7', name: 'Love Republic, водолазка-кейп', note: 'примерить по груди', price: 6999, url: L+'mp002xw1o1d1/' },
+    { id: 'k8', name: 'Love Republic, кардиган на замке', note: 'минимализм', price: 10999, url: L+'mp002xw1o1c7/' },
+    { id: 'k9', name: 'Asya Semyonova, джемпер с отдельными рукавами', note: 'есть в сером', price: 11990, url: 'https://asyasemyonova.ru/magazin/product/dzhemper-s-otdelnymi-rukavami-chernyj' },
+    { id: 'k10', name: 'Love Republic, пушистый кардиган', note: 'Premium collection', price: 15999, url: L+'mp002xw1o1ct/' },
+  ]},
+  { id: 'skirt', title: 'Юбки', tip: 'Одна.', items: [
+    { id: 's1', name: 'Emberens, голубая', note: 'последняя; есть зелёная, бордо, коричневая', price: 5510, old: 5799, url: L+'mp002xw1o89z/' },
+    { id: 's2', name: 'Emberens, коричневая', note: 'похожий формат', price: 6080, old: 6399, url: L+'mp002xw1ottu/' },
+    { id: 's3', name: 'Olesa Chugunova, юбка-годе', note: 'посмотреть по длине', price: 6644, old: 9990, url: L+'mp002xw0vgb0/' },
+    { id: 's4', name: 'Seventouch, макси из костюмной ткани', note: 'глубокий разрез', price: 7150, url: L+'mp002xw0v6xv/' },
+    { id: 's5', name: 'Love Republic, макси посвободнее', note: 'Premium collection', price: 9999, url: L+'mp002xw1o37d/' },
+  ]},
+  { id: 'sport', title: 'Спортивный костюм', tip: 'Один.', items: [
+    { id: 'p1', name: 'Doux Saint, велюр', note: '', price: 7420, old: 10600, hot: true, url: L+'mp002xw0y5cl/' },
+    { id: 'p2', name: 'Ballansiko, вариант 1', note: 'был раскуплен, ждать', price: 10355, old: 10900, url: L+'mp002xw1lnk8/' },
+    { id: 'p3', name: 'Ballansiko, вариант 2', note: '', price: 10355, old: 10900, url: L+'mp002xw1n2gx/' },
+    { id: 'p4', name: 'Ballansiko, костюм-ципао', note: '', price: 10165, old: 10700, url: L+'mp002xw1n2du/' },
+    { id: 'p5', name: 'Shopuno, с укороченным худи', note: 'более женственный', price: 14700, url: L+'mp002xw1pncu/' },
+  ]},
+  { id: 'tee', title: 'Футболки', tip: 'Пара акцентных + базовые.', items: [
+    { id: 't1', name: 'Befree, базовая с кантом', note: '', price: 569, old: 1399, url: L+'mp002xw1dekt/' },
+    { id: 't2', name: 'Nume, футболка', note: 'на замену зарининой', price: 1313, old: 3790, hot: true, url: L+'rtlaez375201/' },
+    { id: 't3', name: 'Nume, жилет с плечами', note: 'акцент', price: 4076, old: 4290, url: L+'rtlafi844301/' },
+    { id: 't4', name: 'Nume, поло', note: 'акцент', price: 4741, old: 4990, url: L+'rtlafd841001/' },
+  ]},
+  { id: 'pants', title: 'Брюки к лоферам', tip: 'Одни или обе пары.', items: [
+    { id: 'r1', name: 'Calliope, зауженные', note: 'на пробу', price: 1559, old: 2599, hot: true, url: L+'mp002xw1o27q/' },
+    { id: 'r2', name: 'Wonderclo, шалфейные', note: 'чуть шире', price: 4717, old: 6100, hot: true, url: L+'mp002xw1ntt0/' },
+  ]},
+  { id: 'dress', title: 'Платья на осень-зиму', tip: '1–2.', items: [
+    { id: 'd1', name: 'Lime, миди с драпировкой', note: '', price: 3999, url: 'https://limestore.com/ru_ru/product/35402-0952_718_201_temno_koricnevyi' },
+    { id: 'd2', name: 'Love Republic, трикотажное мини', note: 'повседневное', price: 6999, url: 'https://loverepublic.ru/catalog/odezhda/platya/334209/' },
+    { id: 'd3', name: 'Zarina, с баской и рукавами-кейп', note: 'больше на выход', price: 7999, url: 'https://zarina.ru/catalog/product/zr2610082906-50/' },
+    { id: 'd4', name: 'Top Top, трикотажное мини', note: 'есть светлое', price: 8990, url: L+'mp002xw0xxlm/' },
+    { id: 'd5', name: 'Love Republic, мини с объёмными рукавами', note: 'и на каждый день, и на выход', price: 8999, url: 'https://loverepublic.ru/catalog/odezhda/platya/333725/' },
+    { id: 'd6', name: 'Lime, мини с шерстью', note: 'минимализм', price: 9999, url: 'https://limestore.com/ru_ru/product/37977-3841_416_201_temno_koricnevyi' },
+  ]},
+  { id: 'jacket', title: 'Куртка демисезон', tip: 'Одна.', items: [
+    { id: 'j1', name: 'Befree, утеплённая', note: 'женственная', price: 6999, old: 7799, url: L+'mp002xw1oyjj/' },
+    { id: 'j2', name: 'Zarina, парка', note: 'как светлая, но актуальнее', price: 9999, url: L+'mp002xw1onqu/' },
+    { id: 'j3', name: 'Asya Semyonova, эко-кожа', note: 'утеплённая', price: 23990, url: 'https://asyasemyonova.ru/magazin/product/kurtka-iz-eko-kozhi-chernyj-1' },
+  ]},
+  { id: 'boots', title: 'Ботильоны на зиму', tip: 'Одна пара — самая дорогая позиция.', items: [
+    { id: 'o1', name: 'Chewhite, интересное голенище', note: '', price: 15680, url: L+'mp002xw1pfpz/' },
+    { id: 'o2', name: 'Valley', note: 'ближе к базе', price: 17989, old: 27690, url: L+'mp002xw0u6py/' },
+    { id: 'o3', name: 'Marc Cony, базовые', note: '', price: 23841, old: 26490, url: L+'mp002xw1p6q1/' },
+    { id: 'o4', name: 'Эконика, база', note: '', price: 26990, url: 'https://ekonika.ru/product/en00487cn22mocco26w' },
+    { id: 'o5', name: 'Marc Cony, модные', note: 'к чёрному и коричневому', price: 26991, old: 29990, url: L+'mp002xw1p6q0/' },
+    { id: 'o6', name: 'Bulmer, полусапоги', note: 'цены нет на скриншотах', price: null, url: L+'mp002xw1mhkk/' },
+  ]},
+];
+const PRESETS = [
+  { name: 'Экономно', ids: ['l1','b1','b2','k1','k2','k3','s1','p1','t1','t2','t4','r1','d1','j1','o1'] },
+  { name: 'Комфортно', ids: ['l4','b2','b3','k5','k7','k8','s3','p3','t1','t2','t3','t4','r1','r2','d5','d6','j2','o4'] },
+  { name: 'По максимуму', ids: ['l4','b2','b3','k8','k9','k10','s5','p5','t1','t2','t3','t4','r1','r2','d5','d6','j3','o5'] },
+];
+
+const ALL = CATS.flatMap(c => c.items.map(i => ({ ...i, cat: c.id })));
+const byId = Object.fromEntries(ALL.map(i => [i.id, i]));
+const fmt = n => n.toLocaleString('ru-RU').replace(/,/g, ' ') + ' ₽';
+const KEY = 'shop-autumn-v1';
+let sel = new Set();
+try { sel = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify([...sel])); } catch (e) {} };
+const sumOf = ids => ids.reduce((s, id) => s + (byId[id]?.price || 0), 0);
+
+document.getElementById('presets').innerHTML = PRESETS.map((p, i) =>
+  `<button type="button" data-p="${i}">${p.name} <small>${fmt(sumOf(p.ids))}</small></button>`).join('');
+
+document.getElementById('list').innerHTML = CATS.map(c => `
+  <section>
+    <div class="cat-head"><h2>${c.title}</h2><span class="cat-sum" id="cs-${c.id}"></span></div>
+    <p class="tip">${c.tip}</p>
+    <ul>${c.items.map(i => `
+      <li id="li-${i.id}"><label>
+        <input type="checkbox" id="cb-${i.id}" data-id="${i.id}" ${i.price == null ? 'disabled' : ''}><span class="box"></span>
+        <span class="info"><span class="name">${i.name}${i.hot ? `<span class="tag">${H13}</span>` : ''}</span>${i.note ? `<span class="note">${i.note}</span>` : ''}</span>
+        <span class="price${i.price == null ? ' na' : ''}">${i.price == null ? 'нет цены' : (i.old ? `<s>${fmt(i.old)}</s>` : '') + fmt(i.price)}</span>
+        <a class="go" href="${i.url}" target="_blank" rel="noopener" aria-label="Открыть товар">↗</a>
+      </label></li>`).join('')}</ul>
+  </section>`).join('');
+
+function render() {
+  let total = 0, n = 0;
+  const summary = [];
+  for (const c of CATS) {
+    const picked = c.items.filter(i => sel.has(i.id));
+    const s = picked.reduce((a, i) => a + i.price, 0);
+    total += s; n += picked.length;
+    const el = document.getElementById('cs-' + c.id);
+    el.textContent = picked.length ? `${picked.length} шт · ${fmt(s)}` : '—';
+    el.classList.toggle('on', picked.length > 0);
+    summary.push(`<div><span>${c.title}</span><b class="${s ? '' : 'zero'}">${s ? fmt(s) : '—'}</b></div>`);
+    for (const i of c.items) {
+      const cb = document.getElementById('cb-' + i.id);
+      cb.checked = sel.has(i.id);
+      document.getElementById('li-' + i.id).classList.toggle('checked', cb.checked);
+    }
+  }
+  document.getElementById('summary').innerHTML = summary.join('');
+  document.getElementById('total').textContent = fmt(total);
+  const w = n % 10 === 1 && n % 100 !== 11 ? 'вещь' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 'вещи' : 'вещей';
+  document.getElementById('cnt').textContent = n ? `Выбрано ${n} ${w}` : 'Ничего не выбрано';
+  save();
+}
+
+document.getElementById('list').addEventListener('change', e => {
+  const id = e.target.dataset.id; if (!id) return;
+  e.target.checked ? sel.add(id) : sel.delete(id);
+  render();
+});
+document.getElementById('presets').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  sel = new Set(PRESETS[+b.dataset.p].ids); render();
+});
+document.getElementById('reset').addEventListener('click', () => { sel.clear(); render(); });
+
+if (!sel.size) { let had = false; try { had = localStorage.getItem(KEY) !== null; } catch (e) {} if (!had) sel = new Set(PRESETS[1].ids); }
+render();
+</script>
+</body>
+</html>
