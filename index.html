@@ -218,7 +218,7 @@ input.grow { flex: 1 1 160px; }
         morning: [t('🛏️', 'Заправить кровать'), t('🪥', 'Почистить зубы и умыться'), t('👕', 'Одеться'), t('🥣', 'Позавтракать'), t('💊', 'Выпить витамины'), t('🎒', 'Проверить портфель')],
         school: [t('📝', 'Сделать домашнее задание'), t('🎒', 'Собрать рюкзак')],
         home: homeTasks(),
-        evening: [t('🎒', 'Собрать портфель на завтра'), t('🚿', 'Принять душ'), t('🪥', 'Почистить зубы'), t('😴', 'Лечь спать в 22:00')]
+        evening: [t('🎒', 'Собрать портфель на завтра'), t('🚿', 'Принять душ'), t('🪥', 'Почистить зубы'), t('🗣️', 'Сделать упражнения логопеда'), t('🦷', 'Надеть скобу'), t('😴', 'Лечь спать в 22:00')]
       },
       clubs: musicClubs(),
       done: {}
@@ -275,6 +275,12 @@ input.grow { flex: 1 1 160px; }
   if (!S.homeV2) { S.sections.home = homeTasks(); S.weekly = weeklyTasks(); S.homeV2 = true; save(); }
   S.weekly = S.weekly || [];
   if (!S.eveningClothesV1) { S.sections.evening = S.sections.evening.filter(x => x.text !== 'Приготовить одежду'); S.eveningClothesV1 = true; save(); }
+  if (!S.eveningV3) {
+    const ev = S.sections.evening, add = [['🗣️', 'Сделать упражнения логопеда'], ['🦷', 'Надеть скобу']].filter(x => !ev.some(e => e.text === x[1]));
+    let at = ev.findIndex(x => /^Лечь спать/.test(x.text)); if (at < 0) at = ev.length;
+    ev.splice(at, 0, ...add.map(x => t(x[0], x[1])));
+    S.eveningV3 = true; save();
+  }
   S.sections.evening.forEach(x => { if (x.text === 'Лечь спать в 21:00') { x.text = 'Лечь спать в 22:00'; save(); } });
 
   const keyOf = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
