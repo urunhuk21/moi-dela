@@ -507,17 +507,27 @@ input.grow { flex: 1 1 160px; }
     const now = new Date(), c = countFor(now);
     api('/progress', { endpoint: pushSub.endpoint, date: keyOf(now), done: c.done, total: c.total }).catch(() => {});
   }
+  // каждый шаг с таймаутом, чтобы кнопка не зависала на «Включаю…»
+  function step(name, p, ms) {
+    return Promise.race([Promise.resolve(p), new Promise((_, rej) => setTimeout(() => rej(new Error('завис')), ms || 20000))])
+      .catch(e => { const err = new Error(e.message || String(e)); err.step = name; throw err; });
+  }
+  function logPush(info) {
+    try { fetch(PUSH_API + '/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(info) }).catch(() => {}); } catch (e) {}
+  }
   function enablePush() {
     ui.push = 'busy'; ui.pushMsg = ''; render();
-    Notification.requestPermission().then(perm => {
-      if (perm !== 'granted') throw new Error('denied');
-      return fetch(PUSH_API + '/vapid').then(r => r.json());
-    }).then(v => swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(v.key) }))
-      .then(sub => { pushSub = sub; return api('/subscribe', { sub: sub.toJSON() }); })
+    let reg;
+    step('разрешение', Notification.requestPermission(), 60000)
+      .then(perm => { if (perm !== 'granted') { const e = new Error('denied'); e.step = 'разрешение'; throw e; } return step('служба', navigator.serviceWorker.ready); })
+      .then(r => { reg = r; swReg = r; return step('ключ', fetch(PUSH_API + '/vapid').then(x => x.json())); })
+      .then(v => step('подписка', reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(v.key) })))
+      .then(sub => { pushSub = sub; return step('сервер', api('/subscribe', { sub: sub.toJSON() })); })
       .then(() => { ui.push = 'on'; ui.pushMsg = 'Напоминание включено.'; render(); reportProgress(); })
       .catch(e => {
+        logPush({ step: e.step || '?', err: String(e.message || e).slice(0, 200), perm: Notification.permission, standalone: standalone, ua: navigator.userAgent.slice(0, 160) });
         ui.push = Notification.permission === 'denied' ? 'denied' : 'off';
-        ui.pushMsg = e.message === 'denied' ? '' : 'Не получилось включить. Проверьте интернет и попробуйте ещё раз.';
+        ui.pushMsg = e.message === 'denied' ? '' : 'Не получилось включить (шаг «' + (e.step || '?') + '»: ' + e.message + '). Пришлите этот текст Claude.';
         render();
       });
   }
