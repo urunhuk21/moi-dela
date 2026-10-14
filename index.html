@@ -479,6 +479,8 @@ input.grow { flex: 1 1 160px; }
 
   // ---- напоминания (web push, только на сайте github.io) ----
   const PUSH_API = 'https://194-87-115-232.sslip.io/kidpush';
+  // публичный ключ сервера напоминаний (не секрет) — вшит, чтобы не зависеть от доступа к серверу
+  const VAPID_KEY = 'BKgkCtfVryS1WS8q8ZLRnCD4-3JJC6RpXSLTsLf8-e5igT7xXGC5vLnK_VX62XDo4vpsEllXJzO2ZOI6ktjvyI4';
   const onSite = /github\.io$/.test(location.hostname);
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
@@ -499,7 +501,7 @@ input.grow { flex: 1 1 160px; }
     if (!onSite) return;
     if (!canPush) { ui.push = isIOS && !standalone ? 'ios-home' : 'unsupported'; return; }
     navigator.serviceWorker.register('sw.js').then(reg => { swReg = reg; return reg.pushManager.getSubscription(); })
-      .then(sub => { pushSub = sub; ui.push = sub ? 'on' : (Notification.permission === 'denied' ? 'denied' : 'off'); render(); reportProgress(); })
+      .then(sub => { pushSub = sub; ui.push = sub ? (S.pushSent ? 'on' : 'manual') : (Notification.permission === 'denied' ? 'denied' : 'off'); render(); reportProgress(); })
       .catch(() => { ui.push = 'unsupported'; render(); });
   }
   function reportProgress() {
@@ -520,10 +522,15 @@ input.grow { flex: 1 1 160px; }
     let reg;
     step('разрешение', Notification.requestPermission(), 60000)
       .then(perm => { if (perm !== 'granted') { const e = new Error('denied'); e.step = 'разрешение'; throw e; } return step('служба', navigator.serviceWorker.ready); })
-      .then(r => { reg = r; swReg = r; return step('ключ', fetch(PUSH_API + '/vapid').then(x => x.json())); })
-      .then(v => step('подписка', reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(v.key) })))
-      .then(sub => { pushSub = sub; return step('сервер', api('/subscribe', { sub: sub.toJSON() })); })
-      .then(() => { ui.push = 'on'; ui.pushMsg = 'Напоминание включено.'; render(); reportProgress(); })
+      .then(r => { reg = r; swReg = r; return step('подписка', reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(VAPID_KEY) })); })
+      .then(sub => {
+        pushSub = sub;
+        S.pushCode = JSON.stringify(sub.toJSON()); save();
+        // сервер может быть недоступен из сети телефона — тогда код подписки передаётся вручную
+        return step('сервер', api('/subscribe', { sub: sub.toJSON() }), 8000)
+          .then(() => { S.pushSent = true; save(); ui.push = 'on'; ui.pushMsg = 'Напоминание включено.'; render(); reportProgress(); })
+          .catch(() => { ui.push = 'manual'; ui.pushMsg = ''; render(); });
+      })
       .catch(e => {
         logPush({ step: e.step || '?', err: String(e.message || e).slice(0, 200), perm: Notification.permission, standalone: standalone, ua: navigator.userAgent.slice(0, 160) });
         ui.push = Notification.permission === 'denied' ? 'denied' : 'off';
@@ -532,7 +539,7 @@ input.grow { flex: 1 1 160px; }
       });
   }
   function disablePush() {
-    const sub = pushSub; pushSub = null;
+    const sub = pushSub; pushSub = null; S.pushSent = false; S.pushCode = ''; save();
     ui.push = 'off'; ui.pushMsg = 'Напоминание выключено.'; render();
     if (sub) { api('/unsubscribe', { endpoint: sub.endpoint }).catch(() => {}); sub.unsubscribe().catch(() => {}); }
   }
@@ -553,6 +560,10 @@ input.grow { flex: 1 1 160px; }
       h += '<p class="hint">Этот браузер не умеет присылать уведомления. На iPhone нужна iOS 16.4 или новее и планер на экране «Домой».</p>';
     } else if (ui.push === 'denied') {
       h += '<p class="hint">Уведомления запрещены. Разрешите их в Настройках телефона → Уведомления → «Мои дела», потом откройте планер заново.</p>';
+    } else if (ui.push === 'manual') {
+      h += '<p class="hint">Уведомления на телефоне разрешены. Осталось передать этот код Claude, чтобы сервер начал присылать напоминания:</p>' +
+        '<textarea id="pushCode" readonly rows="4" style="width:100%;font:12px/1.4 monospace;border:2px solid var(--line);border-radius:12px;padding:8px;background:var(--bg);color:var(--ink)">' + esc(S.pushCode || '') + '</textarea>' +
+        '<div class="row"><button class="btn" data-act="push-copy">Скопировать код</button><button class="btn ghost" data-act="push-sent">Код передан</button><button class="btn ghost" data-act="push-off">Выключить</button></div>';
     } else if (ui.push === 'on') {
       h += '<p class="hint">Каждый вечер в 20:30 придёт уведомление, если ещё не все дела отмечены.</p>' +
         '<div class="row"><button class="btn ghost" data-act="push-test">Проверить сейчас</button><button class="btn ghost" data-act="push-off">Выключить</button></div>';
@@ -643,6 +654,14 @@ input.grow { flex: 1 1 160px; }
     if (act === 'push-on') { enablePush(); return; }
     if (act === 'push-off') { disablePush(); return; }
     if (act === 'push-test') { testPush(); return; }
+    if (act === 'push-copy') {
+      const ta = document.getElementById('pushCode');
+      const done = () => { ui.pushMsg = 'Код скопирован. Отправьте его Claude (например, перешлите себе и вставьте в чат).'; render(); };
+      const fallback = () => { if (ta) { ta.focus(); ta.select(); } ui.pushMsg = 'Выделите код и скопируйте его вручную.'; };
+      try { navigator.clipboard.writeText(S.pushCode || '').then(done, fallback); } catch (e) { fallback(); }
+      return;
+    }
+    if (act === 'push-sent') { S.pushSent = true; save(); ui.push = 'on'; ui.pushMsg = 'Готово. Напоминания начнут приходить, когда Claude добавит код на сервер.'; render(); return; }
     if (act === 'prize-close') { ui.prize = 0; ui.party = false; render(); return; }
     if (act === 'party-close') { if (e.target === a || a.tagName === 'BUTTON') { ui.party = false; render(); } return; }
     if (act === 'gate') { ui.gate = true; ui.gateErr = ''; render(); }
