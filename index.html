@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Мои дела">
+<meta name="theme-color" content="#E8467C">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
 <style>[hidden]{display:none!important} body{margin:0} :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -123,6 +127,8 @@ input.grow { flex: 1 1 160px; }
 .del { color: var(--berry); }
 .daypick { display: flex; gap: 6px; flex-wrap: wrap; }
 .daypick button { border: 2px solid var(--line); background: var(--surface); border-radius: 10px; padding: 6px 10px; font-weight: 800; font-size: 14px; }
+.bell { border-top: 2px dashed var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.bell ol { margin: 0; padding-left: 20px; font-size: 14px; color: var(--muted); }
 .daypick button[aria-pressed="true"] { background: var(--sky); border-color: var(--sky); color: #fff; }
 
 /* праздник */
@@ -434,7 +440,7 @@ input.grow { flex: 1 1 160px; }
       '<button class="btn" data-act="edit-done">Готово</button></div>' +
       '<form class="row" id="pwChangeForm"><label for="pwChange"><b>Новый пароль:</b></label><input type="password" id="pwChange" class="grow" autocomplete="new-password">' +
       '<button class="btn ghost" type="submit">Сменить пароль</button></form>' + (ui.pwMsg ? '<p class="hint">' + ui.pwMsg + '</p>' : '') +
-      '<p class="hint">Отметки сбрасываются каждое утро. Чтобы распечатать таблицу на неделю, откройте файл в браузере на компьютере и нажмите ⌘P.</p></div>';
+      '<p class="hint">Отметки сбрасываются каждое утро. Чтобы распечатать таблицу на неделю, откройте файл в браузере на компьютере и нажмите ⌘P.</p>' + bellBlock() + '</div>';
     h += '<section class="panel" data-sec="' + sec.id + '"><div class="phead"><h2>' + sec.ic + ' ' + sec.title + '</h2><span class="cnt">каждый день</span></div>' +
       editRows(S.sections[sec.id], sec.id) + addForm(sec.id, 'Новое дело');
     const bd = byDay(sec.id);
@@ -462,6 +468,82 @@ input.grow { flex: 1 1 160px; }
     const shift = (d.getDay() + 6) % 7;
     d.setDate(d.getDate() - shift);
     return Array.from({ length: 7 }, (_, i) => { const x = new Date(d); x.setDate(d.getDate() + i); return x; });
+  }
+
+  // ---- напоминания (web push, только на сайте github.io) ----
+  const PUSH_API = 'https://194-87-115-232.sslip.io/kidpush';
+  const onSite = /github\.io$/.test(location.hostname);
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+  const canPush = onSite && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  let swReg = null, pushSub = null;
+  ui.push = '';
+  ui.pushMsg = '';
+
+  function api(path, body) {
+    return fetch(PUSH_API + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+  }
+  function keyBytes(b64) {
+    const s = atob((b64 + '='.repeat((4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from(s, c => c.charCodeAt(0));
+  }
+  function initPush() {
+    if (!onSite) return;
+    if (!canPush) { ui.push = isIOS && !standalone ? 'ios-home' : 'unsupported'; return; }
+    navigator.serviceWorker.register('sw.js').then(reg => { swReg = reg; return reg.pushManager.getSubscription(); })
+      .then(sub => { pushSub = sub; ui.push = sub ? 'on' : (Notification.permission === 'denied' ? 'denied' : 'off'); render(); reportProgress(); })
+      .catch(() => { ui.push = 'unsupported'; render(); });
+  }
+  function reportProgress() {
+    if (!pushSub) return;
+    const now = new Date(), c = countFor(now);
+    api('/progress', { endpoint: pushSub.endpoint, date: keyOf(now), done: c.done, total: c.total }).catch(() => {});
+  }
+  function enablePush() {
+    ui.push = 'busy'; ui.pushMsg = ''; render();
+    Notification.requestPermission().then(perm => {
+      if (perm !== 'granted') throw new Error('denied');
+      return fetch(PUSH_API + '/vapid').then(r => r.json());
+    }).then(v => swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(v.key) }))
+      .then(sub => { pushSub = sub; return api('/subscribe', { sub: sub.toJSON() }); })
+      .then(() => { ui.push = 'on'; ui.pushMsg = 'Напоминание включено.'; render(); reportProgress(); })
+      .catch(e => {
+        ui.push = Notification.permission === 'denied' ? 'denied' : 'off';
+        ui.pushMsg = e.message === 'denied' ? '' : 'Не получилось включить. Проверьте интернет и попробуйте ещё раз.';
+        render();
+      });
+  }
+  function disablePush() {
+    const sub = pushSub; pushSub = null;
+    ui.push = 'off'; ui.pushMsg = 'Напоминание выключено.'; render();
+    if (sub) { api('/unsubscribe', { endpoint: sub.endpoint }).catch(() => {}); sub.unsubscribe().catch(() => {}); }
+  }
+  function testPush() {
+    if (!pushSub) return;
+    ui.pushMsg = 'Отправляю…'; render();
+    api('/test', { endpoint: pushSub.endpoint })
+      .then(() => { ui.pushMsg = 'Отправлено. Уведомление придёт через несколько секунд.'; render(); })
+      .catch(() => { ui.pushMsg = 'Не удалось отправить. Попробуйте выключить и снова включить напоминание.'; render(); });
+  }
+  function bellBlock() {
+    if (!onSite || !ui.push) return '';
+    let h = '<div class="bell"><b>🔔 Напоминание в 20:30</b>';
+    if (ui.push === 'ios-home') {
+      h += '<p class="hint">На iPhone напоминания работают, только если планер открыт с экрана «Домой»:</p>' +
+        '<ol><li>Откройте эту страницу в Safari.</li><li>Нажмите «Поделиться» → «На экран „Домой“».</li><li>Откройте «Мои дела» с экрана «Домой» и включите напоминание здесь.</li></ol>';
+    } else if (ui.push === 'unsupported') {
+      h += '<p class="hint">Этот браузер не умеет присылать уведомления. На iPhone нужна iOS 16.4 или новее и планер на экране «Домой».</p>';
+    } else if (ui.push === 'denied') {
+      h += '<p class="hint">Уведомления запрещены. Разрешите их в Настройках телефона → Уведомления → «Мои дела», потом откройте планер заново.</p>';
+    } else if (ui.push === 'on') {
+      h += '<p class="hint">Каждый вечер в 20:30 придёт уведомление, если ещё не все дела отмечены.</p>' +
+        '<div class="row"><button class="btn ghost" data-act="push-test">Проверить сейчас</button><button class="btn ghost" data-act="push-off">Выключить</button></div>';
+    } else {
+      h += '<p class="hint">Каждый вечер в 20:30 телефон напомнит зайти и отметить дела. Если всё уже отмечено, напоминания не будет.</p>' +
+        '<div class="row"><button class="btn" data-act="push-on"' + (ui.push === 'busy' ? ' disabled' : '') + '>' + (ui.push === 'busy' ? 'Включаю…' : 'Включить напоминание') + '</button></div>';
+    }
+    return h + (ui.pushMsg ? '<p class="hint"><b>' + ui.pushMsg + '</b></p>' : '') + '</div>';
   }
 
   function weekStats(date) {
@@ -533,6 +615,7 @@ input.grow { flex: 1 1 160px; }
       const c = countFor(now);
       if (!wasAll && c.total && c.done === c.total) ui.party = true;
       checkPrize();
+      reportProgress();
       render();
       return;
     }
@@ -540,6 +623,9 @@ input.grow { flex: 1 1 160px; }
     const a = e.target.closest('[data-act]');
     if (!a) return;
     const act = a.dataset.act;
+    if (act === 'push-on') { enablePush(); return; }
+    if (act === 'push-off') { disablePush(); return; }
+    if (act === 'push-test') { testPush(); return; }
     if (act === 'prize-close') { ui.prize = 0; ui.party = false; render(); return; }
     if (act === 'party-close') { if (e.target === a || a.tagName === 'BUTTON') { ui.party = false; render(); } return; }
     if (act === 'gate') { ui.gate = true; ui.gateErr = ''; render(); }
@@ -589,6 +675,7 @@ input.grow { flex: 1 1 160px; }
 
   // новый день — перерисовать в полночь, если страница открыта
   checkPrize();
+  initPush();
   let lastDay = keyOf(new Date());
   setInterval(() => { const k = keyOf(new Date()); if (k !== lastDay) { lastDay = k; render(); } }, 60000);
 
