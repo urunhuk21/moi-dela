@@ -292,6 +292,7 @@ input.grow { flex: 1 1 160px; }
   })();
 
   // простой хэш, чтобы пароль не лежал в хранилище открытым текстом
+  const RESET_HASH = '16lfthq';
   function pwHash(str) {
     let h = 2166136261;
     for (const ch of 'moi-dela:' + str) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; }
@@ -650,7 +651,10 @@ input.grow { flex: 1 1 160px; }
     e.preventDefault();
     const f = e.target;
     if (f.id === 'gateForm') {
-      if (pwHash(document.getElementById('gateIn').value) === S.pw) { ui.mode = 'edit'; ui.gate = null; ui.gateErr = ''; }
+      const typed = document.getElementById('gateIn').value.trim();
+      // код сброса: если пароль забыт, его вводят вместо пароля (в коде хранится только хэш)
+      if (pwHash(typed.toLowerCase()) === RESET_HASH) { S.pw = null; save(); ui.gateErr = 'Пароль сброшен. Придумайте новый.'; }
+      else if (pwHash(document.getElementById('gateIn').value) === S.pw) { ui.mode = 'edit'; ui.gate = null; ui.gateErr = ''; }
       else ui.gateErr = 'Неверный пароль, попробуйте ещё раз.';
       render(); return;
     }
